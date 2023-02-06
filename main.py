@@ -53,13 +53,21 @@ class Board:
         return 0
 
     def reward(self, terminal):
-        if terminal == 1:
-            return 1
-        elif terminal == 2:
-            return -1
+        if self.turn == 2:
+            if terminal == 1:
+                return 1
+            elif terminal == 2:
+                return -1
+            elif terminal == 0:
+                return 0
         else:
-            return 0
-
+            if terminal == 1:
+                return -1
+            elif terminal == 2:
+                return 1
+            elif terminal == 0:
+                return 0
+        return 0
 
 
 def update_q_table(q_table, state_bytes, action, reward, new_state_bytes):
@@ -76,7 +84,7 @@ q_table = {}
 
 env = Board()
 
-num_episodes = 10000
+num_episodes = 1000000
 max_steps_per_episode = 100
 
 learning_rate = 0.1
@@ -84,8 +92,8 @@ discount_rate = 0.99
 
 exploration_rate = 1
 max_exploration_rate = 1
-min_exploration_rate = 0.01
-exploration_decay_rate = 0.001
+min_exploration_rate = 0.0001
+exploration_decay_rate = 0.00001
 
 rewards_all_episodes = []
 
@@ -96,18 +104,18 @@ for episode in range(num_episodes):
     rewards_current_episode = 0
     for step in range(max_steps_per_episode):
         if random.uniform(0,1) > exploration_rate:
-            ms = np.max(q_table[state_bytes][np.where(state == 0)])
-            if isinstance(ms, np.ndarray):
-                for i in ms:
-                    a = np.where(q_table[state_bytes] == i)[0][0]
-                    if state[a] == 0:
-                        action = a
-                        break
-            else:
-                action = np.where(q_table[state_bytes] == ms)[0][0]
+            valid_indeces = np.where(state == 0)[0]
+            # quiero el máximo de los valores de q_table[state_bytes] en los índices válidos
+            # si hay varios máximos, elijo uno que esté en valid_indeces
+            ms = np.max(q_table[state_bytes][valid_indeces])
+            # the suggestion is wrong
+            # action = np.random.choice(np.where(q_table[state_bytes] == ms)[0]) because there can be more than one maximum and we want to choose one of the valid ones
+            action = np.random.choice(np.where(q_table[state_bytes] == ms)[0][np.isin(np.where(q_table[state_bytes] == ms)[0], valid_indeces)])
         else:
             action = env.random_action()
         new_state, reward, done = env.step(action)
+        # Guardarse el estado
+        # cuando llegas al done backpropagar el error
         new_state_bytes = new_state.tobytes()
         update_q_table(q_table, state_bytes, action, reward, new_state_bytes)
         state = new_state
@@ -117,38 +125,44 @@ for episode in range(num_episodes):
     exploration_rate = min_exploration_rate + (max_exploration_rate - min_exploration_rate) * np.exp(-exploration_decay_rate * episode)
     rewards_all_episodes.append(rewards_current_episode)
 
-rewards_per_thousand_episodes = np.split(np.array(rewards_all_episodes), num_episodes/1000)
-count = 1000
+rewards_per_thousand_episodes = np.split(np.array(rewards_all_episodes), num_episodes/100000)
+count = 100000
 print("Average reward per thousand episodes")
 for r in rewards_per_thousand_episodes:
-    print(count, ": ", str(sum(r/1000)))
-    count += 1000
+    print(count, ": ", str(sum(r/100000)))
+    count += 100000
 
 for i in range(9):
     done = False
     state = env.reset()
     state_bytes = state.tobytes()
     rewards_current_episode = 0
-    for step in range(max_steps_per_episode):
-        ms = np.max(q_table[state_bytes][np.where(state == 0)])
-        if isinstance(ms, np.ndarray):
-            for i in ms:
-                a = np.where(q_table[state_bytes] == i)[0][0]
-                if state[a] == 0:
-                    action = a
-                    break
-        else:
-            action = np.where(q_table[state_bytes] == ms)[0][0]
-        new_state, reward, done = env.step(action)
-        new_state_bytes = new_state.tobytes()
-        update_q_table(q_table, state_bytes, action, reward, new_state_bytes)
-        state = new_state
-        print(env)
-        input()
-        rewards_current_episode += reward
+    turno = random.randint(0,1)
+    while not done:
+        if turno == 1:
+            valid_indeces = np.where(state == 0)[0]
+            # quiero el máximo de los valores de q_table[state_bytes] en los índices válidos
+            # si hay varios máximos, elijo uno que esté en valid_indeces
+            ms = np.max(q_table[state_bytes][valid_indeces])
+            # the suggestion is wrong
+            # action = np.random.choice(np.where(q_table[state_bytes] == ms)[0]) because there can be more than one maximum and we want to choose one of the valid ones
+            action = np.random.choice(np.where(q_table[state_bytes] == ms)[0][np.isin(np.where(q_table[state_bytes] == ms)[0], valid_indeces)])
+            new_state, reward, done = env.step(action)
+            new_state_bytes = new_state.tobytes()
+            update_q_table(q_table, state_bytes, action, reward, new_state_bytes)
+            state = new_state
+            rewards_current_episode += reward
+            turno = 1 - turno
+        
+        elif turno == 0 and not done:
+            print(env)
+            action = int(input('mete el puto numero:'))
+            new_state, reward, done = env.step(action)
+            state = new_state
+            turno = 1 - turno
         if done == True:
             break
+        
     
-    
-    
+    print(env)
     input()
