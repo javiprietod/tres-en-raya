@@ -8,14 +8,15 @@ class Board:
         self.turn = 1
     
     def __str__(self):
-        XO = {0: ' ', 1: 'X', 2: 'O'}
-        str = '-------'
-        for i in range(3):
-            str += '|' + self.state[i*3:i*3+3] + '|'
-            for j in range(3):
-                str += self.state[i*3+j]
-            str += '-------'
-        str += '-------'
+        XO = {0: '   ', 1: ' X ', 2: ' O '}
+        str = '╔' + ('═'*3 + '╦')*2 + '═'*3 + '╗'
+        for idx, elem in enumerate(self.state):
+            if idx % 3 == 0:
+                str += '\n║'
+            str += XO[int(elem)] + '║'
+            if idx % 3 == 2 and idx != 8:
+                str += '\n╠' + ('═'*3 + '╬')*2 + '═'*3 + '╣'
+        str += '\n╚' + ('═'*3 + '╩')*2 + '═'*3 + '╝'
         return str
     
     def reset(self):
