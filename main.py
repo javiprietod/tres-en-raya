@@ -1,11 +1,14 @@
 import random
 import numpy as np
+import pickle
 
+LEARNING_RATE = 0.2
+DISCOUNT_RATE = 0.9
 
 class Board:
     def __init__(self):
         self.state = np.zeros(9, dtype=np.int8)
-        self.turn = 1
+        self.turn = 0
 
     def __str__(self):
         XO = {0: '   ', 1: ' X ', 2: ' O '}
@@ -21,26 +24,14 @@ class Board:
 
     def reset(self):
         self.state = np.zeros(9, dtype=np.int8)
+        self.turn = random.randint(1,2)
         return self.state
 
     def random_action(self):
         return np.random.choice(np.where(self.state == 0)[0])
 
-    def q_action(self, q_table, state_hash):
-        valid_indeces = np.where(state == 0)[0]
-        if state_hash in q_table:
-            ms = np.max(q_table[state_hash][valid_indeces])
-        else:
-            q_table[state_hash] = np.zeros(9) 
-            return np.random.choice(valid_indeces)
-        return np.random.choice(np.where(q_table[state_hash] == ms)[0][np.isin(np.where(q_table[state_hash] == ms)[0], valid_indeces)])
-        
-
     def step(self, action):
-        if self.state[action] != 0:
-            raise Exception('Invalid action')
         self.state[action] = self.turn
-        self.turn = 3 - self.turn
         victory = self.terminal()
         return self.state, self.reward(victory), victory != 0, victory
 
@@ -80,112 +71,139 @@ class Board:
         return 0
 
 
-def update_q_table(q_table, state_hash, action, reward, new_state_hash):
-    posterior = learning_rate * reward if new_state_hash not in q_table else learning_rate * (reward + discount_rate * np.max(q_table[new_state_hash].values()))
-    if state_hash in q_table:
-        q_table[state_hash][action] = q_table[state_hash][action] * (1 - learning_rate) + posterior
-    else:
-        q_table[state_hash] = np.zeros(9)
-        q_table[state_hash][action] = posterior
-    return q_table[state_hash][action]
+class Player:
+    def __init__(self):
+        self.q_table = {}
 
-
-q_table = {}
-
-
-env = Board()
-
-num_episodes = 6000000
-max_steps_per_episode = 100
-
-learning_rate = 0.1
-discount_rate = 0.9
-
-exploration_rate = 1
-max_exploration_rate = 1
-min_exploration_rate = 0.01
-exploration_decay_rate = 0.000001
-
-rewards_all_episodes = []
-
-for episode in range(num_episodes):
-    done = False
-    state = env.reset()
-    
-    state_hash = str(state)
-    rewards_current_episode = 0
-    states_list = []
-    for step in range(max_steps_per_episode):
-        if random.uniform(0,1) > exploration_rate:
-            action = env.q_action(q_table, state_hash)
+    def q_action(self, state_hash, state=None):
+        valid_indeces = np.where(state == 0)[0]
+        if state_hash in self.q_table:
+            ms = np.max(self.q_table[state_hash][valid_indeces])
         else:
-            action = env.random_action()
-        new_state, reward, done, victory = env.step(action)
-        states_list.append((state_hash, action))
-        # Guardarse el estado
-        # cuando llegas al done backpropagar el error
-        new_state_hash = str(new_state)
-        # update_q_table(q_table, state_hash, action, reward, new_state_hash)
-        state_hash = new_state_hash
-        rewards_current_episode += reward
-        if done == True:
-            turn = 2 - env.turn # 1
-            rewards=[0,0]
-            if victory != -1:
-                rewards[turn]=1 #[0,1]
+            self.q_table[state_hash] = np.zeros(9) 
+            return np.random.choice(valid_indeces)
+        return np.random.choice(np.where(self.q_table[state_hash] == ms)[0][np.isin(np.where(self.q_table[state_hash] == ms)[0], valid_indeces)])
+
+
+    def update_q_table(self, state_hash, action, reward, new_state_hash):
+        posterior = LEARNING_RATE * reward if new_state_hash not in self.q_table else LEARNING_RATE * (reward + DISCOUNT_RATE * np.max(self.q_table[new_state_hash].values()))
+        if state_hash in self.q_table:
+            self.q_table[state_hash][action] = self.q_table[state_hash][action] * (1 - LEARNING_RATE) + posterior
+        else:
+            self.q_table[state_hash] = np.zeros(9)
+            self.q_table[state_hash][action] = posterior
+        return self.q_table[state_hash][action]
+
+    def save_policy(self, player):
+        with open('policy_' + player, 'wb') as f:
+            pickle.dump(self.q_table, f)
+    
+    def load_policy(self, player):
+        with open('policy_' + player, 'rb') as f:
+            self.q_table = pickle.load(f)
+        
+
+
+
+def train(num_episodes):
+    env = Board()
+    exploration_rate = 0.7
+    max_exploration_rate = 1
+    min_exploration_rate = 0.01
+    exploration_decay_rate = 1/num_episodes
+    j1 = Player()
+    j2 = Player()
+    for episode in range(num_episodes):
+        done = False
+        state = env.reset()
+        state_hash = str(state)
+        rewards_current_episode = 0
+        states_list = []
+        while not done:
+            if env.turn == 1:
+                player = j1
             else:
-                rewards = [0.1,0.1]
-            # Feed rewards backwards
-            # al que gana le das el reward entero 
-            for i, (state_hash, action) in enumerate(reversed(states_list)):
-                v=update_q_table(q_table, state_hash, action, rewards[abs(turn-i)%2], new_state_hash)
-                rewards[abs(turn-i)%2]=v
-            break
-                
+                player = j2
 
-    exploration_rate = min_exploration_rate + (max_exploration_rate - min_exploration_rate) * np.exp(-exploration_decay_rate * episode)
-    rewards_all_episodes.append(rewards_current_episode)
-    if len(rewards_all_episodes) % (num_episodes/100) == 0:
-        print("Episode: ", len(rewards_all_episodes), " Reward: ", sum(rewards_all_episodes[int((len(rewards_all_episodes))-num_episodes/100):int(len(rewards_all_episodes)-1)])/(num_episodes/100), " Exploration rate: ", exploration_rate)
-
-rewards_per_thousand_episodes = np.split(np.array(rewards_all_episodes), 10)
-count = num_episodes/10
-print("Average reward per thousand episodes")
-for r in rewards_per_thousand_episodes:
-    print(count, ": ", str(sum(r/(num_episodes/10))))
-    count += num_episodes/10
-
-for i in range(9):
-    done = False
-    state = env.reset()
-    state_hash = state.tobytes()
-    rewards_current_episode = 0
-    turno = random.randint(0,1)
-    while not done:
-        if turno == 1:
-            valid_indeces = np.where(state == 0)[0]
-            # quiero el máximo de los valores de q_table[state_hash] en los índices válidos
-            # si hay varios máximos, elijo uno que esté en valid_indeces
-            ms = np.max(q_table[state_hash][valid_indeces])
-            # the suggestion is wrong
-            # action = np.random.choice(np.where(q_table[state_hash] == ms)[0]) because there can be more than one maximum and we want to choose one of the valid ones
-            action = np.random.choice(np.where(q_table[state_hash] == ms)[0][np.isin(np.where(q_table[state_hash] == ms)[0], valid_indeces)])
+            # choose action
+            if random.uniform(0,1) > exploration_rate:
+                action = player.q_action(state_hash, state)
+            else:
+                action = env.random_action()
             new_state, reward, done, victory = env.step(action)
-            new_state_hash = new_state.tobytes()
-            update_q_table(q_table, state_hash, action, reward, new_state_hash)
+            states_list.append((state_hash, action))
+
+            new_state_hash = str(new_state)
+            
+            state_hash = new_state_hash
             state = new_state
             rewards_current_episode += reward
-            turno = 1 - turno
-        
-        elif turno == 0 and not done:
-            print(env)
-            action = int(input('mete el puto numero:'))
-            new_state, reward, done, victory = env.step(action)
-            state = new_state
-            turno = 1 - turno
-        if done == True:
-            break
-        
+            if done == True:
+                turn = env.turn - 1
+                rewards = [0,0]
+                if victory != -1:
+                    rewards[turn] = 1
+                    rewards[abs(1-turn)] = -1 
+                else:
+                    rewards = [0,0]
+                for i, (state_hash, action) in enumerate(reversed(states_list)):
+                    v = player.update_q_table(state_hash, action, rewards[abs(turn-i) % 2], new_state_hash)
+                    rewards[abs(turn-i) % 2] = v
+                    player = j1 if player == j2 else j2
+                break
+            env.turn = 3 - env.turn        
+            
+        exploration_rate = min_exploration_rate + (max_exploration_rate - min_exploration_rate) * np.exp(-exploration_decay_rate * episode)
+        # rewards_all_episodes.append(rewards_current_episode)
+        # if len(rewards_all_episodes) % (num_episodes/1000) == 0:
+        #     print("Episode: ", len(rewards_all_episodes), " Reward: ", sum(rewards_all_episodes[int((len(rewards_all_episodes))-num_episodes/1000):int(len(rewards_all_episodes)-1)])/(num_episodes/1000), " Exploration rate: ", exploration_rate, end='\r')
+    j1.save_policy('j1')
+    j2.save_policy('j2')
     
-    print(env)
-    input()
+def play(games):
+    env = Board()
+    for _ in range(games):
+        done = False
+        state = env.reset()
+        state_hash = str(state)
+        j1 = Player()
+        j1.load_policy('j1')
+        j2 = Player()
+        j2.load_policy('j2')
+        while not done:
+            if env.turn == 1:
+                valid_indeces = np.where(state == 0)[0]
+                ms = np.max(j1.q_table[state_hash][valid_indeces])
+                action = np.random.choice(np.where(j1.q_table[state_hash] == ms)[0][np.isin(np.where(j1.q_table[state_hash] == ms)[0], valid_indeces)])
+                new_state, _, done, _ = env.step(action)
+                new_state_hash = str(new_state)
+                state_hash = new_state_hash
+                state = new_state
+                env.turn = 3 - env.turn
+            
+            elif env.turn == 2:
+                print(env)
+                action = int(input('mete el puto numero:'))
+                
+                state, _, done, _ = env.step(action)
+                state_hash = str(state)
+                env.turn = 3 - env.turn
+                # Codigo para que juegue el jugador 2 solo
+                # valid_indeces = np.where(state == 0)[0]
+                # ms = np.max(j2.q_table[state_hash][valid_indeces])
+                # action = np.random.choice(np.where(j2.q_table[state_hash] == ms)[0][np.isin(np.where(j2.q_table[state_hash] == ms)[0], valid_indeces)])
+                # new_state, _, done, victory = env.step(action)
+                # new_state_hash = str(new_state)
+                # state_hash = new_state_hash
+                # state = new_state
+                # env.turn = 3 - env.turn
+
+            
+        
+        # print(env)
+        # print('Ganador: ', 'Jugador 1' if victory == 1 else 'Jugador 2' if victory == 2 else 'Empate')
+        # input()
+
+if __name__ == '__main__':
+    q_table = train(50000)
+    play(1000)
