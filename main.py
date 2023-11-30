@@ -2,6 +2,7 @@ import random
 import numpy as np
 import pickle
 import os
+import time
 
 LEARNING_RATE = 0.2
 DISCOUNT_RATE = 0.9
@@ -114,11 +115,12 @@ def train(num_episodes):
     exploration_decay_rate = 1/num_episodes
     j1 = Player()
     j2 = Player()
+    print('Training...')
     for episode in range(num_episodes):
+        print('Episode: ', episode, end='\r')
         done = False
         state = env.reset()
         state_hash = str(state)
-        rewards_current_episode = 0
         states_list = []
         while not done:
             if env.turn == 1:
@@ -159,7 +161,10 @@ def train(num_episodes):
         exploration_rate = min_exploration_rate + (max_exploration_rate - min_exploration_rate) * np.exp(-exploration_decay_rate * episode) #     print("Episode: ", len(rewards_all_episodes), " Reward: ", sum(rewards_all_episodes[int((len(rewards_all_episodes))-num_episodes/1000):int(len(rewards_all_episodes)-1)])/(num_episodes/1000), " Exploration rate: ", exploration_rate, end='\r')
     j1.save_policy('j1')
     j2.save_policy('j2')
-    
+    time.sleep(1)
+    print()
+    print('Training finished')
+
 def play(games):
     env = Board()
     for _ in range(games):
@@ -168,6 +173,7 @@ def play(games):
         state_hash = str(state)
         j1 = Player()
         j1.load_policy('j1')
+
         while not done:
             if env.turn == 1:
                 valid_indeces = np.where(state == 0)[0]
@@ -182,20 +188,26 @@ def play(games):
             elif env.turn == 2:
                 os.system('clear||cls')
                 print(env)
-                action = int(input('Enter a number (1-9):'))
+                valid_indeces = np.where(state == 0)[0]
+                action = 10
+                while (action-1) not in valid_indeces:
+                    action = int(input('Enter a number (1-9): '))
                 
                 state, _, done, victory = env.step(action-1)
                 state_hash = str(state)
                 env.turn = 3 - env.turn
+                os.system('clear||cls')
+                print(env)
+                time.sleep(1.2)
                 
         
         print(env)
         if victory == 1:
-            print('Computer wins')
+            print('\n\nCOMPUTER WINS\n')
         elif victory == 2:
-            print('You win')
+            print('\n\nYOU WIN\n')
         else:
-            print('Draw')
+            print('\n\nDRAW\n')
         input('Press enter to continue')
                 
 if __name__ == '__main__':
