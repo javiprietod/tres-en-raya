@@ -173,7 +173,7 @@ def play(games):
         state_hash = str(state)
         j1 = Player()
         j1.load_policy('j1')
-
+        
         while not done:
             if env.turn == 1:
                 valid_indeces = np.where(state == 0)[0]
@@ -188,6 +188,8 @@ def play(games):
             elif env.turn == 2:
                 os.system('clear||cls')
                 print(env)
+                # for k in list(j1.q_table.keys())[:5]:
+                #     print(k, j1.q_table[k])
                 valid_indeces = np.where(state == 0)[0]
                 action = 10
                 while (action-1) not in valid_indeces:
@@ -211,6 +213,6 @@ def play(games):
         input('Press enter to continue')
                 
 if __name__ == '__main__':
-    q_table = train(50000)
+    train(50000)
     games = 5
     play(games) 
